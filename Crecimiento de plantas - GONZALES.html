@@ -1,0 +1,1457 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crecimiento de Plantas - Simulador Botánico Realista</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        /* Estilo Glassmorphism Refinado */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+        }
+        /* Sliders personalizados */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            background: rgba(255, 255, 255, 0.18);
+            height: 6px;
+            border-radius: 999px;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #facc15;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(250, 204, 21, 0.6);
+            transition: transform 0.15s ease;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+        #scrubberSlider::-webkit-slider-thumb {
+            background: #4ade80;
+            box-shadow: 0 0 10px rgba(74, 222, 128, 0.6);
+        }
+        .tool-btn {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .tool-btn:active {
+            transform: scale(0.94);
+        }
+        .tool-btn.active {
+            background: rgba(56, 189, 248, 0.28);
+            border-color: #38bdf8;
+            box-shadow: 0 0 16px rgba(56, 189, 248, 0.35);
+        }
+        /* Ocultar scrollbars en móviles si hiciera falta */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+</head>
+<body class="relative text-slate-100">
+
+    <!-- Lienzo Principal de Simulación -->
+    <canvas id="botanicalCanvas"></canvas>
+
+    <!-- HUD Superior: Telemetría Botánica -->
+    <header class="fixed top-3 left-3 right-3 sm:top-5 sm:left-5 sm:right-5 z-10 pointer-events-none flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+        <!-- Título y Especie -->
+        <div class="glass-panel rounded-2xl px-4 py-2.5 pointer-events-auto flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-amber-400/20 border border-amber-400/40 flex items-center justify-center text-amber-300 shadow-inner">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+                </svg>
+            </div>
+            <div>
+                <h1 class="text-sm sm:text-base font-bold tracking-tight text-white leading-tight">Crecimiento de Plantas</h1>
+                <p class="text-[11px] text-pink-300/90 font-medium italic">Prunus serrulata (Cerezo en Flor / Sakura)</p>
+            </div>
+        </div>
+
+        <!-- Panel de Indicadores en Tiempo Real -->
+        <div class="glass-panel rounded-2xl px-3.5 py-2.5 pointer-events-auto grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-5 w-full md:w-auto text-xs">
+            <div class="flex flex-col">
+                <span class="text-slate-400 text-[10px] uppercase tracking-wider font-semibold">Etapa Actual</span>
+                <span id="hudStage" class="font-bold text-amber-300 truncate mt-0.5">Semilla</span>
+            </div>
+            <div class="flex flex-col">
+                <span class="text-slate-400 text-[10px] uppercase tracking-wider font-semibold">Altura Tallo</span>
+                <span id="hudHeight" class="font-bold text-white mt-0.5">0.0 cm</span>
+            </div>
+            <div class="flex flex-col">
+                <span class="text-slate-400 text-[10px] uppercase tracking-wider font-semibold">Hidratación</span>
+                <div class="flex items-center gap-1.5 mt-0.5">
+                    <span id="hudWater" class="font-bold text-sky-300">65%</span>
+                    <div class="w-10 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                        <div id="hudWaterBar" class="h-full bg-sky-400 transition-all duration-300" style="width: 65%"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="flex flex-col">
+                <span class="text-slate-400 text-[10px] uppercase tracking-wider font-semibold">Luz Solar</span>
+                <span id="hudSun" class="font-bold text-yellow-300 mt-0.5">80%</span>
+            </div>
+            <div class="flex flex-col col-span-2 sm:col-span-1">
+                <span class="text-slate-400 text-[10px] uppercase tracking-wider font-semibold">Estado Vital</span>
+                <span id="hudHealth" class="font-bold text-emerald-400 mt-0.5 flex items-center gap-1">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Óptimo
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Notificación Flotante (Reemplazo elegante de alert) -->
+    <div id="toastNotification" class="fixed top-24 left-1/2 -translate-x-1/2 z-30 glass-panel px-4 py-2 rounded-full text-xs font-medium text-emerald-200 border-emerald-400/40 opacity-0 pointer-events-none transition-opacity duration-300">
+        Nutrientes orgánicos aplicados al sustrato
+    </div>
+
+    <!-- Panel Inferior: Herramientas Interactivas y Controles Ambientales -->
+    <footer class="fixed bottom-3 left-3 right-3 sm:bottom-5 sm:left-5 sm:right-5 z-10 pointer-events-none flex flex-col lg:flex-row justify-between items-stretch lg:items-end gap-3">
+        
+        <!-- Herramientas de Cuidado Directo -->
+        <div class="glass-panel rounded-2xl p-3 pointer-events-auto flex flex-wrap sm:flex-nowrap items-center justify-between sm:justify-start gap-2.5">
+            <!-- Botón Regadera Interactiva -->
+            <button id="btnWaterTool" class="tool-btn flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 border border-sky-400/40 text-sky-200 text-xs font-semibold cursor-pointer" title="Activa la regadera y haz clic o mantén presionado sobre la tierra">
+                <svg class="w-4 h-4 text-sky-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2m0 14v2m-7-9H3m18 0h-2M7.5 14.5C7.5 17 9.5 19 12 19s4.5-2 4.5-4.5c0-2.5-4.5-7.5-4.5-7.5s-4.5 5-4.5 7.5z"/>
+                </svg>
+                <span>Regadera</span>
+            </button>
+
+            <!-- Botón Fertilizante / Nutrientes -->
+            <button id="btnFertilize" class="tool-btn flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-200 text-xs font-semibold cursor-pointer">
+                <svg class="w-4 h-4 text-amber-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/>
+                </svg>
+                <span>Abonar (<span id="nutrientPct">70</span>%)</span>
+            </button>
+
+            <!-- Botón Reiniciar Ciclo -->
+            <button id="btnReset" class="tool-btn flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-slate-700/40 hover:bg-slate-600/50 border border-slate-500/30 text-slate-300 text-xs font-medium cursor-pointer" title="Plantar nueva semilla">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                <span class="hidden sm:inline">Reiniciar</span>
+            </button>
+        </div>
+
+        <!-- Controles de Ambiente y Línea Temporal (Time-lapse) -->
+        <div class="glass-panel rounded-2xl p-3 pointer-events-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+            
+            <!-- Control Intensidad Solar -->
+            <div class="flex flex-col gap-1 min-w-[140px]">
+                <div class="flex justify-between text-[11px]">
+                    <span class="text-slate-300 font-medium flex items-center gap-1">
+                        ☀️ Intensidad Solar
+                    </span>
+                    <span id="sunSliderVal" class="text-yellow-300 font-bold">80%</span>
+                </div>
+                <input id="sunSlider" type="range" min="10" max="100" value="80" class="w-full">
+            </div>
+
+            <!-- Selector Manual de Etapa (Scrubber) -->
+            <div class="flex flex-col gap-1 min-w-[160px]">
+                <div class="flex justify-between text-[11px]">
+                    <span class="text-slate-300 font-medium">🌱 Desarrollo</span>
+                    <span id="growthPctVal" class="text-emerald-300 font-bold">0%</span>
+                </div>
+                <input id="scrubberSlider" type="range" min="0" max="100" step="0.1" value="0" class="w-full">
+            </div>
+
+            <!-- Velocidad de Simulación (Time-lapse) -->
+            <div class="flex flex-col gap-1">
+                <span class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Velocidad Tiempo</span>
+                <div class="flex items-center gap-1 bg-slate-900/60 p-1 rounded-xl border border-white/10">
+                    <button data-speed="0" class="speed-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-300 hover:bg-white/10 cursor-pointer">⏸</button>
+                    <button data-speed="1" class="speed-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 cursor-pointer">1x</button>
+                    <button data-speed="5" class="speed-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-300 hover:bg-white/10 cursor-pointer">5x</button>
+                    <button data-speed="20" class="speed-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-300 hover:bg-white/10 cursor-pointer">20x</button>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        /**
+         * SIMULADOR BOTÁNICO HIPERREALISTA - HELIANTHUS ANNUUS (GIRASOL)
+         * Motor procedural de crecimiento radicular, caulinar, foliar y floral
+         * con iluminación atmosférica dinámica, partículas y física de viento.
+         */
+
+        const canvas = document.getElementById('botanicalCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Estado global de la simulación
+        const state = {
+            growth: 0.02,          // Progreso de crecimiento [0.0 a 1.0]
+            speed: 1,              // Multiplicador de velocidad (0, 1, 5, 20)
+            sunlight: 0.80,        // Intensidad solar [0.1 a 1.0]
+            moisture: 0.65,        // Humedad del suelo [0.0 a 1.0]
+            nutrients: 0.70,       // Nutrientes disponibles [0.0 a 1.0]
+            health: 1.0,           // Salud general [0.0 a 1.0]
+            wiltFactor: 0.0,       // Factor de marchitamiento por falta o exceso de agua [0.0 a 1.0]
+            yellowing: 0.0,        // Clorosis foliar por estrés [0.0 a 1.0]
+            time: 0,               // Tiempo acumulado para animaciones fluidas
+            windAngle: 0,          // Oscilación actual del viento
+            wateringMode: false,   // Herramienta regadera activa
+            isPointerDown: false,  // Presión táctil o ratón
+            pointerX: 0,
+            pointerY: 0,
+            soilLevelRatio: 0.68   // Proporción vertical donde comienza la tierra
+        };
+
+        // Elementos procedurales estáticos y dinámicos
+        let soilPebbles = [];
+        let rootSystem = null;
+        let leafNodes = [];
+        let branchNodes = [];
+        let waterDroplets = [];
+        let soilMoisturePatches = [];
+        let floatingMotes = [];
+        let fallingPetals = [];
+        let fertilizerGranules = [];
+
+        // Referencias al DOM (HUD y Controles)
+        const ui = {
+            stage: document.getElementById('hudStage'),
+            height: document.getElementById('hudHeight'),
+            water: document.getElementById('hudWater'),
+            waterBar: document.getElementById('hudWaterBar'),
+            sun: document.getElementById('hudSun'),
+            health: document.getElementById('hudHealth'),
+            sunSlider: document.getElementById('sunSlider'),
+            sunVal: document.getElementById('sunSliderVal'),
+            scrubber: document.getElementById('scrubberSlider'),
+            growthVal: document.getElementById('growthPctVal'),
+            nutrientPct: document.getElementById('nutrientPct'),
+            btnWater: document.getElementById('btnWaterTool'),
+            btnFertilize: document.getElementById('btnFertilize'),
+            btnReset: document.getElementById('btnReset'),
+            toast: document.getElementById('toastNotification')
+        };
+
+        // Generador pseudoaleatorio determinista para consistencia visual
+        function seededRandom(seed) {
+            let x = Math.sin(seed++) * 10000;
+            return x - Math.floor(x);
+        }
+
+        /**
+         * Inicializa la arquitectura procedural de la planta y el suelo
+         */
+        function initBotanicalArchitecture() {
+            // 1. Generar piedras, minerales y textura de capas subterráneas
+            soilPebbles = [];
+            for (let i = 0; i < 85; i++) {
+                const depthRatio = seededRandom(i * 13.7);
+                soilPebbles.push({
+                    xRatio: seededRandom(i * 7.3),
+                    yRatio: depthRatio,
+                    rx: 2 + seededRandom(i * 3.1) * (depthRatio > 0.55 ? 9 : 4),
+                    ry: 1.5 + seededRandom(i * 5.9) * (depthRatio > 0.55 ? 6 : 3),
+                    angle: seededRandom(i * 11.1) * Math.PI,
+                    color: depthRatio > 0.55
+                        ? `rgba(${95 + Math.floor(seededRandom(i)*35)}, ${85 + Math.floor(seededRandom(i+1)*30)}, ${78 + Math.floor(seededRandom(i+2)*25)}, 0.75)`
+                        : `rgba(62, 42, 28, 0.65)`
+                });
+            }
+
+            // 2. Generar estructura radicular jerárquica (Raíz pivotante + raíces secundarias + pelos absorbentes)
+            rootSystem = buildRootTree(0, 0, Math.PI / 2, 1.0, 0, 1);
+
+            // 3. Generar ramas estructurales y ramilletes foliares/florales del cerezo
+            leafNodes = [];
+            branchNodes = [];
+            const totalBranches = 12;
+            for (let i = 0; i < totalBranches; i++) {
+                const t = 0.28 + (i / totalBranches) * 0.66;
+                const side = i % 2 === 0 ? 1 : -1;
+                const crownProfile = Math.sin((i / totalBranches) * Math.PI * 0.9 + 0.2);
+                const branchLen = 42 + crownProfile * 68;
+                const branchAngle = side * (0.48 + seededRandom(i * 17.3) * 0.32) - 0.18;
+                const appearAt = 0.24 + (i / totalBranches) * 0.44;
+
+                // Sub-ramas y ramilletes en cada rama
+                const twigs = [];
+                const twigCount = 3;
+                for (let j = 0; j < twigCount; j++) {
+                    const twigT = 0.45 + (j / twigCount) * 0.52;
+                    const twigSide = j % 2 === 0 ? 1 : -1;
+                    twigs.push({
+                        t: twigT,
+                        angle: twigSide * (0.35 + seededRandom(i * 31 + j) * 0.3),
+                        length: branchLen * (0.38 + seededRandom(i * 13 + j) * 0.2),
+                        leafCount: 3,
+                        blossomCount: 2 + Math.floor(seededRandom(i * 7 + j) * 3),
+                        seed: i * 53 + j * 19
+                    });
+                }
+
+                branchNodes.push({
+                    t,
+                    side,
+                    maxLength: branchLen,
+                    angle: branchAngle,
+                    appearAt,
+                    twigs,
+                    seed: i * 41
+                });
+            }
+
+            // 4. Generar motas de polen/polvo flotando en el aire
+            floatingMotes = [];
+            for (let i = 0; i < 45; i++) {
+                floatingMotes.push({
+                    x: Math.random(),
+                    y: Math.random() * state.soilLevelRatio,
+                    size: 0.8 + Math.random() * 2.2,
+                    vx: (Math.random() - 0.5) * 0.0003,
+                    vy: -0.0001 - Math.random() * 0.00025,
+                    phase: Math.random() * Math.PI * 2
+                });
+            }
+            fallingPetals = [];
+        }
+
+        /**
+         * Construye recursivamente el árbol de raíces subterráneas
+         */
+        function buildRootTree(x, y, angle, strength, depth, seed) {
+            const maxDepth = 4;
+            const segments = [];
+            const numSegs = depth === 0 ? 12 : 6;
+            const segLen = (depth === 0 ? 18 : 11) * strength;
+
+            let cx = x;
+            let cy = y;
+            let curAngle = angle;
+
+            for (let i = 0; i < numSegs; i++) {
+                const progress = i / numSegs;
+                // Curvatura orgánica geotrópica (tiende hacia abajo con leves desviaciones)
+                curAngle += (seededRandom(seed + i * 3.7) - 0.5) * 0.45;
+                if (depth === 0) {
+                    curAngle = Math.PI / 2 + (seededRandom(seed + i * 2.1) - 0.5) * 0.25;
+                }
+
+                const nx = cx + Math.cos(curAngle) * segLen;
+                const ny = cy + Math.sin(curAngle) * segLen;
+
+                const children = [];
+                if (depth < maxDepth && i > 0 && seededRandom(seed + i * 9.3) > (depth === 0 ? 0.22 : 0.45)) {
+                    const branchSide = (i % 2 === 0 ? 1 : -1) * (seededRandom(seed + i) > 0.2 ? 1 : -1);
+                    const branchAngle = curAngle + branchSide * (0.45 + seededRandom(seed + i * 5.1) * 0.55);
+                    children.push(buildRootTree(
+                        nx, ny,
+                        branchAngle,
+                        strength * (0.68 - progress * 0.15),
+                        depth + 1,
+                        seed * 17 + i * 31
+                    ));
+                }
+
+                segments.push({
+                    x1: cx, y1: cy,
+                    x2: nx, y2: ny,
+                    thickness: Math.max(0.4, (4.5 - depth * 1.1) * (1 - progress * 0.55)),
+                    appearThreshold: (depth * 0.14) + (progress * 0.35),
+                    children: children
+                });
+
+                cx = nx;
+                cy = ny;
+            }
+            return segments;
+        }
+
+        /**
+         * Ajusta el tamaño del canvas de manera responsiva y nítida (HiDPI)
+         */
+        function resizeCanvas() {
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = window.innerWidth * dpr;
+            canvas.height = window.innerHeight * dpr;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+
+        /**
+         * Muestra notificación temporal en pantalla
+         */
+        let toastTimeout;
+        function showToast(msg, colorClass = 'text-emerald-200') {
+            ui.toast.textContent = msg;
+            ui.toast.className = `fixed top-24 left-1/2 -translate-x-1/2 z-30 glass-panel px-4 py-2 rounded-full text-xs font-medium ${colorClass} border-white/20 transition-opacity duration-300 opacity-100`;
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                ui.toast.classList.remove('opacity-100');
+                ui.toast.classList.add('opacity-0');
+            }, 2400);
+        }
+
+        /**
+         * Lógica fisiológica y actualización del estado de la planta
+         */
+        function updateSimulation(dt) {
+            state.time += dt;
+
+            // Oscilación orgánica del viento (combinación de ondas sinusoidales)
+            const gust = Math.sin(state.time * 0.7) * 0.5 + Math.sin(state.time * 1.9) * 0.3 + Math.sin(state.time * 3.3) * 0.2;
+            state.windAngle = gust * 0.045;
+
+            // Generación continua de gotas si la regadera está activa y presionada
+            if (state.wateringMode && state.isPointerDown) {
+                for (let i = 0; i < 4; i++) {
+                    waterDroplets.push({
+                        x: state.pointerX - 24 + (Math.random() - 0.5) * 14,
+                        y: state.pointerY + 12 + (Math.random() - 0.5) * 8,
+                        vx: -1.2 - Math.random() * 1.2,
+                        vy: 2.5 + Math.random() * 2.5,
+                        size: 2 + Math.random() * 2.2
+                    });
+                }
+            }
+
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            const soilY = height * state.soilLevelRatio;
+
+            // Actualizar gotas de agua
+            for (let i = waterDroplets.length - 1; i >= 0; i--) {
+                const d = waterDroplets[i];
+                d.x += d.vx;
+                d.y += d.vy;
+                d.vy += 0.28; // Gravedad
+
+                // Impacto con la superficie del suelo
+                if (d.y >= soilY) {
+                    state.moisture = Math.min(1.0, state.moisture + 0.0022);
+                    soilMoisturePatches.push({
+                        x: d.x,
+                        y: soilY + 4 + Math.random() * 25,
+                        radius: 8 + Math.random() * 16,
+                        alpha: 0.45
+                    });
+                    waterDroplets.splice(i, 1);
+                }
+            }
+
+            // Desvanecer manchas de absorción en tierra
+            for (let i = soilMoisturePatches.length - 1; i >= 0; i--) {
+                soilMoisturePatches[i].y += 0.15;
+                soilMoisturePatches[i].radius += 0.08;
+                soilMoisturePatches[i].alpha -= 0.004;
+                if (soilMoisturePatches[i].alpha <= 0) {
+                    soilMoisturePatches.splice(i, 1);
+                }
+            }
+
+            // Actualizar gránulos de fertilizante
+            for (let i = fertilizerGranules.length - 1; i >= 0; i--) {
+                const g = fertilizerGranules[i];
+                g.y += g.vy;
+                g.vy += 0.22;
+                if (g.y >= soilY + g.targetDepth) {
+                    g.alpha -= 0.015;
+                    if (g.alpha <= 0) fertilizerGranules.splice(i, 1);
+                }
+            }
+
+            // Actualizar partículas flotantes en el aire
+            floatingMotes.forEach(m => {
+                m.x += m.vx + Math.sin(state.time + m.phase) * 0.00015;
+                m.y += m.vy;
+                if (m.x < 0) m.x = 1;
+                if (m.x > 1) m.x = 0;
+                if (m.y < 0) m.y = state.soilLevelRatio - 0.02;
+            });
+
+            // Generar pétalos de cerezo cayendo suavemente con la brisa en floración
+            if (state.growth > 0.78 && fallingPetals.length < 35 && Math.random() < 0.25) {
+                fallingPetals.push({
+                    x: width * 0.5 + (Math.random() - 0.5) * 260,
+                    y: soilY * (0.18 + Math.random() * 0.32),
+                    vx: 0.35 + Math.random() * 0.65,
+                    vy: 0.45 + Math.random() * 0.65,
+                    rot: Math.random() * Math.PI * 2,
+                    vrot: (Math.random() - 0.5) * 0.05,
+                    size: 3.5 + Math.random() * 2.5,
+                    phase: Math.random() * Math.PI * 2
+                });
+            }
+
+            for (let i = fallingPetals.length - 1; i >= 0; i--) {
+                const p = fallingPetals[i];
+                p.x += p.vx + Math.sin(state.time * 2 + p.phase) * 0.45 + state.windAngle * 14;
+                p.y += p.vy;
+                p.rot += p.vrot;
+                if (p.y >= soilY - 2 || p.x > width + 20 || p.x < -20) {
+                    fallingPetals.splice(i, 1);
+                }
+            }
+
+            // Simulación metabólica cuando el tiempo corre
+            if (state.speed > 0) {
+                const simStep = dt * state.speed;
+
+                // Evaporación y consumo hídrico
+                const evaporation = (0.0018 + state.sunlight * 0.0032 + state.growth * 0.0025) * simStep;
+                state.moisture = Math.max(0, state.moisture - evaporation);
+
+                // Evaluación de estrés hídrico (sequía < 25% o encharcamiento > 92%)
+                let targetWilt = 0;
+                if (state.moisture < 0.25) {
+                    targetWilt = (0.25 - state.moisture) / 0.25;
+                } else if (state.moisture > 0.92) {
+                    targetWilt = (state.moisture - 0.92) / 0.08 * 0.65;
+                }
+                state.wiltFactor += (targetWilt - state.wiltFactor) * Math.min(1, simStep * 0.8);
+
+                // Evaluación de clorosis (falta de luz o nutrientes)
+                let targetYellow = 0;
+                if (state.nutrients < 0.25) targetYellow += (0.25 - state.nutrients) * 2.2;
+                if (state.sunlight < 0.22) targetYellow += (0.22 - state.sunlight) * 1.8;
+                if (state.moisture > 0.92) targetYellow += 0.35;
+                state.yellowing += (Math.min(1, targetYellow) - state.yellowing) * Math.min(1, simStep * 0.5);
+
+                // Cálculo de fotosíntesis y tasa de crecimiento
+                const waterEfficiency = state.moisture < 0.15 ? 0.1 : (state.moisture > 0.94 ? 0.4 : 1.0);
+                const sunEfficiency = 0.25 + state.sunlight * 0.85;
+                const nutrientEfficiency = 0.4 + state.nutrients * 0.7;
+
+                const growthRate = 0.011 * waterEfficiency * sunEfficiency * nutrientEfficiency * (1 - state.wiltFactor * 0.75);
+
+                if (state.growth < 1.0) {
+                    state.growth = Math.min(1.0, state.growth + growthRate * simStep);
+                    state.nutrients = Math.max(0.08, state.nutrients - growthRate * 0.35 * simStep);
+                }
+
+                // Salud general
+                state.health = Math.max(0.1, Math.min(1.0, 1.0 - (state.wiltFactor * 0.55 + state.yellowing * 0.45)));
+            }
+
+            syncUI();
+        }
+
+        /**
+         * Sincroniza la interfaz HTML con los valores fisiológicos actuales
+         */
+        function syncUI() {
+            const g = state.growth;
+            let stageName = "Hueso de Cerezo Latente";
+            if (g >= 0.04 && g < 0.16) stageName = "Germinación Radicular";
+            else if (g >= 0.16 && g < 0.35) stageName = "Plántula y Tallo Leñoso";
+            else if (g >= 0.35 && g < 0.65) stageName = "Ramificación y Follaje";
+            else if (g >= 0.65 && g < 0.80) stageName = "Yemas Florales Rosadas";
+            else if (g >= 0.80) stageName = "Floración Sakura Plena";
+
+            ui.stage.textContent = stageName;
+
+            // Altura realista escalada hasta 320 cm (árbol joven de cerezo)
+            const heightCm = g < 0.12 ? 0 : ((g - 0.12) / 0.88) * 320;
+            ui.height.textContent = `${heightCm.toFixed(1)} cm`;
+
+            const waterPct = Math.round(state.moisture * 100);
+            ui.water.textContent = `${waterPct}%`;
+            ui.waterBar.style.width = `${waterPct}%`;
+            ui.waterBar.className = `h-full transition-all duration-300 ${
+                waterPct < 25 ? 'bg-amber-400' : (waterPct > 92 ? 'bg-indigo-400' : 'bg-sky-400')
+            }`;
+
+            ui.sun.textContent = `${Math.round(state.sunlight * 100)}%`;
+            ui.nutrientPct.textContent = Math.round(state.nutrients * 100);
+
+            if (!document.activeElement || document.activeElement !== ui.scrubber) {
+                ui.scrubber.value = (g * 100).toFixed(1);
+            }
+            ui.growthVal.textContent = `${Math.round(g * 100)}%`;
+
+            // Estado de salud
+            if (state.wiltFactor > 0.45) {
+                ui.health.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span> ${state.moisture > 0.9 ? 'Exceso Agua' : 'Marchita (Sed)'}`;
+                ui.health.className = "font-bold text-amber-300 mt-0.5 flex items-center gap-1";
+            } else if (state.yellowing > 0.45) {
+                ui.health.innerHTML = `<span class="w-2 h-2 rounded-full bg-yellow-400"></span> Falta Nutrientes`;
+                ui.health.className = "font-bold text-yellow-300 mt-0.5 flex items-center gap-1";
+            } else {
+                ui.health.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Óptimo`;
+                ui.health.className = "font-bold text-emerald-400 mt-0.5 flex items-center gap-1";
+            }
+        }
+
+        /**
+         * Interpolación lineal de colores RGB
+         */
+        function lerpColor(c1, c2, t) {
+            t = Math.max(0, Math.min(1, t));
+            const r = Math.round(c1[0] + (c2[0] - c1[0]) * t);
+            const g = Math.round(c1[1] + (c2[1] - c1[1]) * t);
+            const b = Math.round(c1[2] + (c2[2] - c1[2]) * t);
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+
+        /**
+         * Renderiza el cielo atmosférico, sol y rayos volumétricos
+         */
+        function drawAtmosphere(width, soilY) {
+            const sun = state.sunlight;
+
+            // Gradiente de cielo dinámico según intensidad solar
+            const topColor = lerpColor([15, 23, 42], [29, 78, 137], sun);
+            const midColor = lerpColor([30, 41, 59], [96, 165, 250], sun);
+            const horizonColor = lerpColor([51, 65, 85], [224, 242, 254], sun);
+
+            const skyGrad = ctx.createLinearGradient(0, 0, 0, soilY);
+            skyGrad.addColorStop(0, topColor);
+            skyGrad.addColorStop(0.55, midColor);
+            skyGrad.addColorStop(1, horizonColor);
+
+            ctx.fillStyle = skyGrad;
+            ctx.fillRect(0, 0, width, soilY);
+
+            // Posición del Sol en la esquina superior derecha
+            const sunX = width * 0.82;
+            const sunY = soilY * 0.22;
+
+            // Halo solar atmosférico
+            const sunGlow = ctx.createRadialGradient(sunX, sunY, 5, sunX, sunY, 140 + sun * 220);
+            sunGlow.addColorStop(0, `rgba(254, 249, 195, ${0.4 + sun * 0.6})`);
+            sunGlow.addColorStop(0.25, `rgba(253, 224, 71, ${0.15 + sun * 0.35})`);
+            sunGlow.addColorStop(0.6, `rgba(251, 191, 36, ${sun * 0.12})`);
+            sunGlow.addColorStop(1, 'rgba(251, 191, 36, 0)');
+
+            ctx.fillStyle = sunGlow;
+            ctx.fillRect(0, 0, width, soilY);
+
+            // Rayos de luz volumétricos
+            if (sun > 0.25) {
+                ctx.save();
+                ctx.translate(sunX, sunY);
+                const rayCount = 7;
+                for (let i = 0; i < rayCount; i++) {
+                    const angle = Math.PI * 0.62 + (i / rayCount) * 0.55 + Math.sin(state.time * 0.3 + i) * 0.02;
+                    const rayGrad = ctx.createLinearGradient(0, 0, Math.cos(angle) * soilY * 1.3, Math.sin(angle) * soilY * 1.3);
+                    rayGrad.addColorStop(0, `rgba(254, 240, 138, ${(sun - 0.2) * 0.14})`);
+                    rayGrad.addColorStop(1, 'rgba(254, 240, 138, 0)');
+
+                    ctx.fillStyle = rayGrad;
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.lineTo(Math.cos(angle - 0.03) * soilY * 1.4, Math.sin(angle - 0.03) * soilY * 1.4);
+                    ctx.lineTo(Math.cos(angle + 0.03) * soilY * 1.4, Math.sin(angle + 0.03) * soilY * 1.4);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+                ctx.restore();
+            }
+
+            // Disco solar nítido
+            ctx.beginPath();
+            ctx.arc(sunX, sunY, 18 + sun * 10, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(254, 252, 232, ${0.35 + sun * 0.65})`;
+            ctx.fill();
+
+            // Motas de polen y luz suspendidas en el aire
+            floatingMotes.forEach(m => {
+                const mx = m.x * width;
+                const my = m.y * soilY / state.soilLevelRatio;
+                const alpha = (0.15 + sun * 0.35) * (0.5 + 0.5 * Math.sin(state.time * 2 + m.phase));
+                ctx.fillStyle = `rgba(254, 249, 195, ${alpha})`;
+                ctx.beginPath();
+                ctx.arc(mx, my, m.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        /**
+         * Renderiza el corte transversal del suelo (humus, subsuelo y roca madre)
+         */
+        function drawSoilCrossSection(width, height, soilY) {
+            const soilDepth = height - soilY;
+            const wet = state.moisture;
+
+            // Oscurecimiento realista de la tierra según la humedad
+            const topSoilColor = lerpColor([112, 78, 52], [44, 28, 18], wet);
+            const midSoilColor = lerpColor([88, 60, 40], [38, 24, 15], wet);
+            const deepSoilColor = lerpColor([58, 44, 36], [30, 22, 18], wet);
+
+            const soilGrad = ctx.createLinearGradient(0, soilY, 0, height);
+            soilGrad.addColorStop(0, topSoilColor);
+            soilGrad.addColorStop(0.28, midSoilColor);
+            soilGrad.addColorStop(0.75, deepSoilColor);
+            soilGrad.addColorStop(1, '#18120e');
+
+            ctx.fillStyle = soilGrad;
+            ctx.fillRect(0, soilY, width, soilDepth);
+
+            // Manchas dinámicas de filtración de agua tras regar
+            soilMoisturePatches.forEach(p => {
+                const pGrad = ctx.createRadialGradient(p.x, p.y, 1, p.x, p.y, p.radius);
+                pGrad.addColorStop(0, `rgba(20, 12, 8, ${p.alpha})`);
+                pGrad.addColorStop(1, 'rgba(20, 12, 8, 0)');
+                ctx.fillStyle = pGrad;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Dibujar minerales, gravilla y textura orgánica subterránea
+            soilPebbles.forEach(peb => {
+                ctx.save();
+                ctx.translate(peb.xRatio * width, soilY + 12 + peb.yRatio * (soilDepth - 16));
+                ctx.rotate(peb.angle);
+                ctx.fillStyle = peb.color;
+                ctx.beginPath();
+                ctx.ellipse(0, 0, peb.rx, peb.ry, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+
+            // Borde superior orgánico con briznas sutiles de musgo/hierba
+            ctx.strokeStyle = lerpColor([74, 52, 34], [28, 18, 12], wet);
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(0, soilY);
+            for (let x = 0; x <= width; x += 24) {
+                const wave = Math.sin(x * 0.03) * 2.2;
+                ctx.lineTo(x, soilY + wave);
+            }
+            ctx.stroke();
+
+            // Gránulos de fertilizante cayendo o disolviéndose
+            fertilizerGranules.forEach(g => {
+                ctx.fillStyle = `rgba(251, 191, 36, ${g.alpha})`;
+                ctx.beginPath();
+                ctx.arc(g.x, g.y, g.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        /**
+         * Renderiza el sistema radicular y pelos absorbentes de manera orgánica
+         */
+        function drawRootBranch(segments, originX, originY, growthProgress, scaleFactor) {
+            segments.forEach(seg => {
+                if (growthProgress <= seg.appearThreshold) return;
+
+                const localProg = Math.min(1, (growthProgress - seg.appearThreshold) / 0.25);
+                const x1 = originX + seg.x1 * scaleFactor;
+                const y1 = originY + seg.y1 * scaleFactor;
+                const x2 = originX + (seg.x1 + (seg.x2 - seg.x1) * localProg) * scaleFactor;
+                const y2 = originY + (seg.y1 + (seg.y2 - seg.y1) * localProg) * scaleFactor;
+
+                ctx.strokeStyle = seg.thickness > 1.8 ? '#d6c3a5' : 'rgba(226, 212, 187, 0.72)';
+                ctx.lineWidth = seg.thickness * Math.min(1.3, 0.5 + growthProgress * 0.8);
+                ctx.lineCap = 'round';
+
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+
+                // Pelos radiculares finos en raíces secundarias
+                if (seg.thickness < 1.6 && localProg > 0.5) {
+                    ctx.strokeStyle = 'rgba(245, 240, 230, 0.32)';
+                    ctx.lineWidth = 0.5;
+                    ctx.beginPath();
+                    ctx.moveTo((x1 + x2) / 2, (y1 + y2) / 2);
+                    ctx.lineTo((x1 + x2) / 2 + 5, (y1 + y2) / 2 + 4);
+                    ctx.stroke();
+                }
+
+                if (seg.children && seg.children.length > 0 && localProg > 0.35) {
+                    drawRootBranch(seg.children[0], originX, originY, growthProgress, scaleFactor);
+                }
+            });
+        }
+
+        /**
+         * Renderiza el hueso / semilla de cerezo en corte subterráneo
+         */
+        function drawSeed(x, y, growth) {
+            const split = Math.min(1, Math.max(0, (growth - 0.03) / 0.14));
+            const scale = 1 + Math.min(0.22, growth * 1.8);
+
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.scale(scale, scale);
+
+            // Mitad izquierda del carozo
+            ctx.save();
+            ctx.rotate(-split * 0.38);
+            ctx.translate(-split * 2.5, 0);
+            drawSeedHalf(-1);
+            ctx.restore();
+
+            // Mitad derecha del carozo
+            ctx.save();
+            ctx.rotate(split * 0.38);
+            ctx.translate(split * 2.5, 0);
+            drawSeedHalf(1);
+            ctx.restore();
+
+            ctx.restore();
+        }
+
+        function drawSeedHalf(side) {
+            ctx.beginPath();
+            ctx.moveTo(0, -9);
+            ctx.bezierCurveTo(side * 8.5, -7, side * 8.5, 7, 0, 9);
+            ctx.closePath();
+            ctx.fillStyle = '#9a6b43';
+            ctx.fill();
+
+            // Sutura leñosa del hueso de cerezo
+            ctx.strokeStyle = '#d6b48c';
+            ctx.lineWidth = 1.1;
+            ctx.beginPath();
+            ctx.moveTo(side * 1.5, -7);
+            ctx.quadraticCurveTo(side * 4.5, 0, side * 1.5, 7);
+            ctx.stroke();
+        }
+
+        /**
+         * Renderiza los cotiledones embrionarios en la base del brote joven
+         */
+        function drawCotyledons(x, y, stemAngle, growth) {
+            if (growth < 0.14 || growth > 0.75) return;
+            const emerge = Math.min(1, (growth - 0.14) / 0.12);
+            const fade = growth > 0.55 ? Math.max(0, 1 - (growth - 0.55) / 0.2) : 1;
+            const size = 11 * emerge * fade;
+            if (size <= 0.5) return;
+
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(stemAngle);
+            ctx.fillStyle = lerpColor([74, 152, 62], [186, 150, 45], Math.max(state.yellowing, 1 - fade));
+
+            [-1, 1].forEach(side => {
+                ctx.save();
+                ctx.rotate(side * (0.65 + state.wiltFactor * 0.4));
+                ctx.beginPath();
+                ctx.ellipse(side * size * 0.6, 0, size * 0.7, size * 0.35, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+
+            ctx.restore();
+        }
+
+        /**
+         * Calcula la geometría del tallo curvo afectado por viento y marchitamiento
+         */
+        function getStemPoint(t, baseX, baseY, maxStemHeight, growth) {
+            const stemGrowth = Math.max(0, Math.min(1, (growth - 0.10) / 0.78));
+            const currentHeight = maxStemHeight * Math.pow(stemGrowth, 0.88);
+
+            // Curvatura por viento y caída gravitacional si hay marchitamiento
+            const wiltBend = state.wiltFactor * 0.65 * Math.pow(t, 1.8);
+            const windBend = state.windAngle * (1.2 + stemGrowth * 1.6) * Math.pow(t, 1.5);
+            const totalAngle = windBend + wiltBend;
+
+            const x = baseX + Math.sin(totalAngle) * currentHeight * t;
+            const y = baseY - Math.cos(totalAngle * 0.65) * currentHeight * t;
+
+            return { x, y, angle: totalAngle, currentHeight };
+        }
+
+        /**
+         * Dibuja una hoja elíptica aserrada de cerezo con nervaduras
+         */
+        function drawLeaf(x, y, angle, length, width, healthColor, veinColor) {
+            if (length <= 1) return;
+
+            ctx.save();
+            ctx.translate(x, y);
+            const droop = state.wiltFactor * 0.55 * (angle >= 0 ? 1 : -1);
+            ctx.rotate(angle + droop);
+
+            // Pecíolo rojizo característico del cerezo
+            const petioleLen = length * 0.22;
+            ctx.strokeStyle = '#9f1239';
+            ctx.lineWidth = Math.max(1.2, width * 0.07);
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(petioleLen, 0);
+            ctx.stroke();
+
+            // Limbo foliar elíptico acuminado
+            ctx.translate(petioleLen, 0);
+            const bladeLen = length * 0.78;
+
+            const leafGrad = ctx.createLinearGradient(0, -width / 2, bladeLen, width / 2);
+            leafGrad.addColorStop(0, healthColor);
+            leafGrad.addColorStop(1, lerpColor([45, 130, 52], [180, 130, 35], state.yellowing));
+
+            ctx.fillStyle = leafGrad;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.bezierCurveTo(bladeLen * 0.25, -width * 0.58, bladeLen * 0.72, -width * 0.42, bladeLen, 0);
+            ctx.bezierCurveTo(bladeLen * 0.72, width * 0.42, bladeLen * 0.25, width * 0.58, 0, 0);
+            ctx.fill();
+
+            // Nervadura central y laterales
+            ctx.strokeStyle = veinColor;
+            ctx.lineWidth = 0.85;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(bladeLen * 0.9, 0);
+            ctx.stroke();
+
+            ctx.lineWidth = 0.55;
+            for (let v = 0.2; v <= 0.76; v += 0.18) {
+                const vx = bladeLen * v;
+                const vw = width * 0.26 * (1 - v * 0.55);
+                ctx.beginPath();
+                ctx.moveTo(vx, 0);
+                ctx.lineTo(vx + bladeLen * 0.12, -vw);
+                ctx.moveTo(vx, 0);
+                ctx.lineTo(vx + bladeLen * 0.12, vw);
+                ctx.stroke();
+            }
+
+            ctx.restore();
+        }
+
+        /**
+         * Dibuja una flor de cerezo (Sakura) de 5 pétalos escotados y estambres rosados
+         */
+        function drawSakuraBlossom(x, y, radius, bloomProgress, seed) {
+            if (bloomProgress <= 0.02 || radius <= 0.5) return;
+
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(seed * 0.7 + Math.sin(state.time * 1.8 + seed) * 0.08);
+            const openScale = 0.35 + bloomProgress * 0.65;
+            ctx.scale(openScale, openScale);
+
+            // 5 pétalos rosados con muesca apical característica
+            for (let i = 0; i < 5; i++) {
+                ctx.save();
+                ctx.rotate((i / 5) * Math.PI * 2);
+
+                const pGrad = ctx.createRadialGradient(0, 0, 1, 0, -radius * 0.6, radius * 1.2);
+                pGrad.addColorStop(0, '#be185d');
+                pGrad.addColorStop(0.35, '#f472b6');
+                pGrad.addColorStop(0.85, '#fbcfe8');
+                pGrad.addColorStop(1, '#fff1f2');
+
+                ctx.fillStyle = pGrad;
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.bezierCurveTo(-radius * 0.52, -radius * 0.35, -radius * 0.45, -radius * 1.05, -radius * 0.08, -radius * 1.12);
+                ctx.lineTo(0, -radius * 0.96); // Muesca típica del pétalo de sakura
+                ctx.lineTo(radius * 0.08, -radius * 1.12);
+                ctx.bezierCurveTo(radius * 0.45, -radius * 1.05, radius * 0.52, -radius * 0.35, 0, 0);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // Centro carmesí y estambres dorados
+            ctx.fillStyle = '#9d174d';
+            ctx.beginPath();
+            ctx.arc(0, 0, radius * 0.2, 0, Math.PI * 2);
+            ctx.fill();
+
+            if (bloomProgress > 0.35) {
+                const stamenCount = 10;
+                ctx.strokeStyle = '#f9a8d4';
+                ctx.lineWidth = 0.7;
+                for (let s = 0; s < stamenCount; s++) {
+                    const sa = (s / stamenCount) * Math.PI * 2;
+                    const sr = radius * 0.42;
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.lineTo(Math.cos(sa) * sr, Math.sin(sa) * sr);
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#fde047';
+                    ctx.beginPath();
+                    ctx.arc(Math.cos(sa) * sr, Math.sin(sa) * sr, 0.9, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            ctx.restore();
+        }
+
+        /**
+         * Renderiza la copa ramificada, hojas verdes y flores de cerezo
+         */
+        function drawCherryCanopy(centerX, seedY, maxStemHeight, leafMainColor, veinColor, barkColor, responsiveScale) {
+            const bloomProgress = Math.max(0, Math.min(1, (state.growth - 0.66) / 0.28));
+
+            branchNodes.forEach(branch => {
+                if (state.growth < branch.appearAt) return;
+                const bExp = Math.min(1, (state.growth - branch.appearAt) / 0.26);
+                const origin = getStemPoint(branch.t, centerX, seedY - 4, maxStemHeight, state.growth);
+                if (origin.y >= window.innerHeight * state.soilLevelRatio - 6) return;
+
+                const len = branch.maxLength * bExp * responsiveScale;
+                const sway = Math.sin(state.time * 1.9 + branch.seed) * 0.04;
+                const bAngle = origin.angle + branch.angle + sway + state.wiltFactor * 0.35 * branch.side;
+
+                const endX = origin.x + Math.sin(bAngle) * len;
+                const endY = origin.y - Math.cos(bAngle) * len;
+                const ctrlX = (origin.x + endX) * 0.5 + branch.side * len * 0.12;
+                const ctrlY = (origin.y + endY) * 0.5 + len * 0.08;
+
+                // Rama principal leñosa
+                ctx.strokeStyle = barkColor;
+                ctx.lineWidth = Math.max(1.8, (4.8 * (1 - branch.t * 0.45)) * bExp);
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(origin.x, origin.y);
+                ctx.quadraticCurveTo(ctrlX, ctrlY, endX, endY);
+                ctx.stroke();
+
+                // Ramillas secundarias, hojas y ramilletes de flores
+                branch.twigs.forEach((twig, idx) => {
+                    if (bExp < twig.t) return;
+                    const tProg = Math.min(1, (bExp - twig.t) / (1 - twig.t + 0.01));
+                    const tx = origin.x + (endX - origin.x) * twig.t;
+                    const ty = origin.y + (endY - origin.y) * twig.t;
+                    const tAngle = bAngle + twig.angle + Math.sin(state.time * 2.4 + twig.seed) * 0.05;
+                    const tLen = twig.length * tProg * responsiveScale;
+
+                    const tipX = tx + Math.sin(tAngle) * tLen;
+                    const tipY = ty - Math.cos(tAngle) * tLen;
+
+                    ctx.strokeStyle = barkColor;
+                    ctx.lineWidth = Math.max(1.1, 2.2 * tProg);
+                    ctx.beginPath();
+                    ctx.moveTo(tx, ty);
+                    ctx.lineTo(tipX, tipY);
+                    ctx.stroke();
+
+                    // Hojas en la ramilla
+                    for (let l = 0; l < twig.leafCount; l++) {
+                        const lAngle = tAngle - Math.PI / 2 + (l - 1) * 0.65;
+                        drawLeaf(
+                            tipX,
+                            tipY,
+                            lAngle,
+                            34 * tProg * responsiveScale,
+                            16 * tProg * responsiveScale,
+                            leafMainColor,
+                            veinColor
+                        );
+                    }
+
+                    // Ramillete de flores de cerezo
+                    if (bloomProgress > 0.02) {
+                        for (let f = 0; f < twig.blossomCount; f++) {
+                            const fAngle = (f / twig.blossomCount) * Math.PI * 2 + twig.seed;
+                            const dist = (6 + f * 3.5) * responsiveScale;
+                            const fx = tipX + Math.cos(fAngle) * dist;
+                            const fy = tipY + Math.sin(fAngle) * dist;
+                            drawSakuraBlossom(fx, fy, 11.5 * responsiveScale, bloomProgress, twig.seed + f);
+                        }
+                    }
+                });
+            });
+
+            // Ramillete apical en la cima del tronco
+            if (state.growth > 0.62) {
+                const apex = getStemPoint(1.0, centerX, seedY - 4, maxStemHeight, state.growth);
+                const topScale = Math.min(1, (state.growth - 0.62) / 0.25);
+                for (let k = 0; k < 5; k++) {
+                    const a = (k / 5) * Math.PI * 2;
+                    drawLeaf(apex.x, apex.y, a, 32 * topScale * responsiveScale, 15 * topScale * responsiveScale, leafMainColor, veinColor);
+                }
+                if (bloomProgress > 0.02) {
+                    for (let b = 0; b < 6; b++) {
+                        const ba = (b / 6) * Math.PI * 2;
+                        drawSakuraBlossom(
+                            apex.x + Math.cos(ba) * 10 * responsiveScale,
+                            apex.y + Math.sin(ba) * 10 * responsiveScale,
+                            13 * responsiveScale,
+                            bloomProgress,
+                            b * 13
+                        );
+                    }
+                }
+            }
+
+            // Pétalos cayendo suavemente por la brisa
+            fallingPetals.forEach(p => {
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.rotate(p.rot);
+                ctx.fillStyle = 'rgba(251, 207, 232, 0.88)';
+                ctx.beginPath();
+                ctx.ellipse(0, 0, p.size, p.size * 0.62, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+        }
+
+        /**
+         * Renderiza la flor del girasol (brácteas, pétalos ligulados y capítulo con filotaxis)
+         */
+        function drawSunflowerHead(x, y, stemAngle, growth) {
+            if (growth < 0.64) return;
+
+            const budProgress = Math.min(1, (growth - 0.64) / 0.16);
+            const bloomProgress = Math.max(0, Math.min(1, (growth - 0.78) / 0.22));
+            const headRadius = (10 + budProgress * 18 + bloomProgress * 8);
+
+            ctx.save();
+            ctx.translate(x, y);
+            // Heliotropismo sutil hacia el sol superior derecho + inclinación por peso
+            const faceAngle = stemAngle + 0.28 + state.wiltFactor * 0.6;
+            ctx.rotate(faceAngle);
+
+            // 1. Brácteas verdes del involucro (sépalos exteriores)
+            const bractCount = 16;
+            for (let i = 0; i < bractCount; i++) {
+                const a = (i / bractCount) * Math.PI * 2;
+                ctx.save();
+                ctx.rotate(a);
+                ctx.fillStyle = '#3f6212';
+                ctx.beginPath();
+                ctx.moveTo(headRadius * 0.6, -4);
+                ctx.lineTo(headRadius * (1.15 + bloomProgress * 0.15), 0);
+                ctx.lineTo(headRadius * 0.6, 4);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // 2. Pétalos amarillos dorados (despliegue progresivo en antesis)
+            if (bloomProgress > 0.02) {
+                const petalCount = 26;
+                const petalLen = headRadius * (0.4 + bloomProgress * 1.45);
+                const petalWidth = headRadius * 0.28;
+
+                for (let layer = 0; layer < 2; layer++) {
+                    for (let i = 0; i < petalCount; i++) {
+                        const a = (i / petalCount) * Math.PI * 2 + layer * 0.12;
+                        ctx.save();
+                        ctx.rotate(a);
+
+                        const pGrad = ctx.createLinearGradient(headRadius * 0.7, 0, headRadius * 0.7 + petalLen, 0);
+                        pGrad.addColorStop(0, layer === 0 ? '#d97706' : '#f59e0b');
+                        pGrad.addColorStop(0.5, '#facc15');
+                        pGrad.addColorStop(1, '#fef08a');
+
+                        ctx.fillStyle = pGrad;
+                        ctx.beginPath();
+                        ctx.moveTo(headRadius * 0.75, 0);
+                        ctx.quadraticCurveTo(headRadius * 0.75 + petalLen * 0.5, -petalWidth, headRadius * 0.75 + petalLen, 0);
+                        ctx.quadraticCurveTo(headRadius * 0.75 + petalLen * 0.5, petalWidth, headRadius * 0.75, 0);
+                        ctx.fill();
+                        ctx.restore();
+                    }
+                }
+            }
+
+            // 3. Disco central (Flósculos tubulares en espiral de Fibonacci)
+            const diskGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, headRadius);
+            diskGrad.addColorStop(0, '#291509');
+            diskGrad.addColorStop(0.75, '#451a03');
+            diskGrad.addColorStop(1, '#78350f');
+
+            ctx.fillStyle = diskGrad;
+            ctx.beginPath();
+            ctx.arc(0, 0, headRadius * 0.88, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Semillas / flósculos dispuestos con ángulo áureo (137.5°)
+            const floretCount = Math.floor(45 + bloomProgress * 95);
+            const goldenAngle = 2.39996323;
+            for (let i = 0; i < floretCount; i++) {
+                const r = Math.sqrt(i / floretCount) * (headRadius * 0.8);
+                const theta = i * goldenAngle;
+                const fx = Math.cos(theta) * r;
+                const fy = Math.sin(theta) * r;
+
+                ctx.fillStyle = i > floretCount * 0.72 && bloomProgress > 0.4
+                    ? 'rgba(250, 204, 21, 0.85)' // Polen dorado exterior
+                    : 'rgba(120, 53, 15, 0.75)';
+                ctx.beginPath();
+                ctx.arc(fx, fy, 1.35, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+
+        /**
+         * Renderiza la regadera interactiva y las gotas de agua
+         */
+        function drawWateringSystem() {
+            // Dibujar gotas en caída
+            waterDroplets.forEach(d => {
+                ctx.fillStyle = 'rgba(125, 211, 252, 0.85)';
+                ctx.beginPath();
+                ctx.ellipse(d.x, d.y, d.size * 0.65, d.size * 1.4, 0.25, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Dibujar regadera si la herramienta está activa
+            if (state.wateringMode) {
+                const x = state.pointerX || window.innerWidth * 0.62;
+                const y = state.pointerY || window.innerHeight * 0.48;
+
+                ctx.save();
+                ctx.translate(x, y);
+                if (state.isPointerDown) ctx.rotate(-0.35);
+
+                // Cuerpo metálico de la regadera
+                ctx.fillStyle = '#0284c7';
+                ctx.strokeStyle = '#bae6fd';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.roundRect(-14, -12, 28, 24, 6);
+                ctx.fill();
+                ctx.stroke();
+
+                // Boquilla
+                ctx.beginPath();
+                ctx.moveTo(-14, 4);
+                ctx.lineTo(-30, -8);
+                ctx.lineTo(-27, -12);
+                ctx.lineTo(-14, -2);
+                ctx.closePath();
+                ctx.fill();
+
+                // Asa superior
+                ctx.beginPath();
+                ctx.arc(4, -12, 10, Math.PI, 0);
+                ctx.stroke();
+
+                ctx.restore();
+            }
+        }
+
+        /**
+         * Bucle principal de renderizado y animación
+         */
+        let lastFrameTime = performance.now();
+        function animate(now) {
+            const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
+            lastFrameTime = now;
+
+            updateSimulation(dt);
+
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            const soilY = height * state.soilLevelRatio;
+            const centerX = width * 0.5;
+            const seedY = soilY + 26;
+
+            ctx.clearRect(0, 0, width, height);
+
+            // 1. Cielo e iluminación
+            drawAtmosphere(width, soilY);
+
+            // 2. Suelo en corte transversal
+            drawSoilCrossSection(width, height, soilY);
+
+            // 3. Sistema radicular subterráneo
+            if (rootSystem && state.growth > 0.03) {
+                const rootScale = Math.min(1.35, (height - soilY) / 230);
+                drawRootBranch(rootSystem, centerX, seedY + 6, state.growth, rootScale);
+            }
+
+            // 4. Semilla en germinación
+            drawSeed(centerX, seedY, state.growth);
+
+            // 5. Tallo, Hojas y Floración aérea
+            // 5. Tronco Leñoso, Ramas, Hojas y Floración Sakura aérea
+            const maxStemHeight = soilY * 0.78;
+            // Transición de brote tierno verdoso a corteza marrón rojiza de cerezo
+            const woodMaturity = Math.min(1, Math.max(0, (state.growth - 0.16) / 0.35));
+            const youngStemColor = lerpColor([54, 118, 46], [148, 128, 42], state.yellowing);
+            const barkColor = lerpColor([54, 118, 46], [92, 56, 44], woodMaturity);
+            const leafMainColor = lerpColor([42, 126, 48], [176, 134, 34], state.yellowing);
+            const veinColor = lerpColor([163, 230, 53], [234, 179, 8], state.yellowing);
+
+            if (state.growth >= 0.10) {
+                const segments = 28;
+                const baseThickness = 3.2 + Math.min(1, state.growth) * 11.5;
+
+                // Dibujar tronco principal segmentado con grosor cónico y lenticelas horizontales
+                for (let i = 0; i < segments; i++) {
+                    const t1 = i / segments;
+                    const t2 = (i + 1) / segments;
+                    const p1 = getStemPoint(t1, centerX, seedY - 4, maxStemHeight, state.growth);
+                    const p2 = getStemPoint(t2, centerX, seedY - 4, maxStemHeight, state.growth);
+
+                    const segThick = Math.max(2, baseThickness * (1 - t1 * 0.68));
+                    ctx.strokeStyle = t1 > 0.78 ? youngStemColor : barkColor;
+                    ctx.lineWidth = segThick;
+                    ctx.lineCap = 'round';
+                    ctx.beginPath();
+                    ctx.moveTo(p1.x, p1.y);
+                    ctx.lineTo(p2.x, p2.y);
+                    ctx.stroke();
+
+                    // Lenticelas horizontales características de la corteza del cerezo
+                    if (woodMaturity > 0.45 && i % 3 === 1 && t1 < 0.72 && p1.y < soilY - 12) {
+                        ctx.strokeStyle = 'rgba(214, 180, 156, 0.35)';
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.moveTo(p1.x - segThick * 0.32, p1.y);
+                        ctx.lineTo(p1.x + segThick * 0.32, p1.y);
+                        ctx.stroke();
+                    }
+                }
+
+                // Cotiledones en la parte baja del brote inicial
+                const cotPos = getStemPoint(0.14, centerX, seedY - 4, maxStemHeight, state.growth);
+                if (cotPos.y < soilY) {
+                    drawCotyledons(cotPos.x, cotPos.y, cotPos.angle, state.growth);
+                }
+
+                // Copa ramificada, hojas y floración de cerezo
+                const responsiveScale = Math.min(1.15, width / 900 + 0.35);
+                drawCherryCanopy(centerX, seedY, maxStemHeight, leafMainColor, veinColor, barkColor, responsiveScale);
+            }
+
+            // 6. Partículas de riego y herramienta regadera
+            drawWateringSystem();
+
+            requestAnimationFrame(animate);
+        }
+
+        /**
+         * Eventos de interacción de usuario (Ratón, Táctil y Controles HUD)
+         */
+        ui.sunSlider.addEventListener('input', e => {
+            state.sunlight = parseInt(e.target.value, 10) / 100;
+            ui.sunVal.textContent = `${e.target.value}%`;
+        });
+
+        ui.scrubber.addEventListener('input', e => {
+            state.growth = parseFloat(e.target.value) / 100;
+            syncUI();
+        });
+
+        // Botones de velocidad (Time-lapse)
+        document.querySelectorAll('.speed-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                state.speed = parseFloat(btn.dataset.speed);
+                document.querySelectorAll('.speed-btn').forEach(b => {
+                    b.className = 'speed-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-300 hover:bg-white/10 cursor-pointer';
+                });
+                btn.className = 'speed-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 cursor-pointer';
+            });
+        });
+
+        // Activar/Desactivar Regadera
+        ui.btnWater.addEventListener('click', () => {
+            state.wateringMode = !state.wateringMode;
+            ui.btnWater.classList.toggle('active', state.wateringMode);
+            canvas.style.cursor = state.wateringMode ? 'none' : 'default';
+            if (state.wateringMode) {
+                showToast('💧 Regadera activa: haz clic o mantén presionado para regar', 'text-sky-200');
+            }
+        });
+
+        // Aplicar Fertilizante Orgánico
+        ui.btnFertilize.addEventListener('click', () => {
+            state.nutrients = Math.min(1.0, state.nutrients + 0.25);
+            const width = window.innerWidth;
+            const soilY = window.innerHeight * state.soilLevelRatio;
+            for (let i = 0; i < 28; i++) {
+                fertilizerGranules.push({
+                    x: width * 0.5 + (Math.random() - 0.5) * 140,
+                    y: soilY - 40 - Math.random() * 50,
+                    vy: 1.5 + Math.random() * 2,
+                    size: 1.8 + Math.random() * 1.5,
+                    targetDepth: 6 + Math.random() * 22,
+                    alpha: 0.95
+                });
+            }
+            showToast('✨ Nutrientes orgánicos absorbidos por el sustrato', 'text-amber-200');
+            syncUI();
+        });
+
+        // Reiniciar Simulación
+        ui.btnReset.addEventListener('click', () => {
+            state.growth = 0.02;
+            state.moisture = 0.65;
+            state.nutrients = 0.70;
+            state.wiltFactor = 0;
+            state.yellowing = 0;
+            initBotanicalArchitecture();
+            showToast('🌱 Nueva semilla plantada en tierra fértil', 'text-emerald-200');
+            syncUI();
+        });
+
+        // Eventos táctiles y de ratón sobre el lienzo
+        function updatePointerPos(clientX, clientY) {
+            state.pointerX = clientX;
+            state.pointerY = clientY;
+        }
+
+        canvas.addEventListener('mousedown', e => {
+            state.isPointerDown = true;
+            updatePointerPos(e.clientX, e.clientY);
+        });
+        window.addEventListener('mousemove', e => {
+            updatePointerPos(e.clientX, e.clientY);
+        });
+        window.addEventListener('mouseup', () => {
+            state.isPointerDown = false;
+        });
+
+        canvas.addEventListener('touchstart', e => {
+            if (e.touches.length > 0) {
+                state.isPointerDown = true;
+                updatePointerPos(e.touches[0].clientX, e.touches[0].clientY);
+            }
+        }, { passive: true });
+        canvas.addEventListener('touchmove', e => {
+            if (e.touches.length > 0) {
+                updatePointerPos(e.touches[0].clientX, e.touches[0].clientY);
+            }
+        }, { passive: true });
+        window.addEventListener('touchend', () => {
+            state.isPointerDown = false;
+        });
+
+        // Arranque seguro al cargar la ventana
+        window.onload = function () {
+            resizeCanvas();
+            initBotanicalArchitecture();
+            syncUI();
+            requestAnimationFrame(animate);
+        };
+    </script>
+</body>
+</html>
